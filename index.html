@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Cloud Prompt Studio</title>
+    
+    <style>
+        /* CSS OTIMIZADO */
+        :root { --primary:#007AFF; --bg:#F2F2F7; --card:#FFFFFF; --border:#C6C6C8; }
+        body { font-family: -apple-system, BlinkMacSystemFont, Roboto, sans-serif; background: var(--bg); margin:0; padding-bottom:100px; }
+        
+        /* Navegação Fixa */
+        .nav-bar { display: flex; background: rgba(255,255,255,0.95); position: sticky; top: 0; z-index: 900; padding: 10px; border-bottom: 1px solid #ccc; justify-content: space-around; backdrop-filter: blur(10px); }
+        .nav-btn { border: none; background: none; font-size: 16px; font-weight: 600; color: #999; padding: 8px 20px; border-radius: 20px; cursor: pointer; }
+        .nav-btn.active { background-color: var(--primary); color: white; }
+        
+        .view-container { display: none; padding: 15px; }
+        .view-container.active { display: block; }
+        
+        .card { background: var(--card); border-radius:16px; padding:18px; margin-bottom:20px; box-shadow:0 2px 5px rgba(0,0,0,0.05); }
+        .section-title { font-size:13px; font-weight:700; text-transform:uppercase; color:#8E8E93; border-bottom:1px solid #eee; padding-bottom:8px; margin-bottom:15px; display:flex; justify-content:space-between; align-items:center; }
+        
+        .grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+        label { display:block; font-weight:600; margin-bottom:5px; font-size:13px; color:#333; margin-top:12px; }
+        
+        /* Loading Screen */
+        #loadingOverlay { display:flex; position:fixed; top:0; left:0; width:100%; height:100%; background:#F2F2F7; z-index:2000; align-items:center; justify-content:center; flex-direction:column; }
+        .spinner { width: 40px; height: 40px; border: 4px solid #ddd; border-top: 4px solid var(--primary); border-radius: 50%; animation: spin 1s linear infinite; margin-bottom:15px;}
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        /* Search Inputs */
+        .searchable-container { position: relative; width: 100%; margin-bottom: 5px; }
+        .search-input { width: 100%; padding: 12px; border: 1px solid var(--border); border-radius: 10px; font-size: 16px; box-sizing: border-box; background:#fff; }
+        .options-list { display: none; position: absolute; top: 105%; left: 0; width: 100%; max-height: 250px; overflow-y: auto; background: white; border: 1px solid var(--border); z-index: 1000; border-radius: 10px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); }
+        .options-list.active { display: block; }
+        .option-item { padding: 12px; border-bottom: 1px solid #f0f0f0; cursor: pointer; font-size: 14px; }
+        .option-detail { font-size:11px; color:#888; display:block; }
+        
+        .main-btn { background:var(--primary); color:white; border:none; width:100%; padding:16px; font-size:18px; font-weight:700; border-radius:14px; margin-top:15px; }
+        .mini-btn { padding:5px 12px; font-size:12px; border-radius:6px; border:none; background:#E5E5EA; cursor:pointer; font-weight:600; }
+        .saved-selector { display:none; max-width: 150px; font-size:11px; padding:5px; border-radius:5px; border:1px solid #ccc; }
+        
+        .gallery-item { background:white; border:1px solid #ddd; border-radius:12px; margin-bottom:10px; overflow:hidden; }
+        .gallery-header { background:#f8f8f8; padding:10px; border-bottom:1px solid #eee; font-weight:bold; font-size:14px; display:flex; justify-content:space-between;}
+        .gallery-content { padding:10px; font-size:11px; font-family:monospace; color:#009900; max-height:100px; overflow-y:auto; }
+    </style>
+</head>
+<body>
+
+    <div id="loadingOverlay">
+        <div class="spinner"></div>
+        <span id="loadingText" style="color:#666; font-weight:600;">Conectando ao Google Sheets...</span>
+        <small style="color:#999; margin-top:5px;">Isso carrega suas variações e salvos</small>
+    </div>
+
+    <nav class="nav-bar">
+        <button class="nav-btn active" onclick="switchTab('creator')" id="tab-creator">✏️ Criar</button>
+        <button class="nav-btn" onclick="switchTab('gallery')" id="tab-gallery">☁️ Galeria</button>
+    </nav>
+
+    <div id="view-creator" class="view-container active">
+        
+        <div class="card">
+            <div class="section-title">
+                <span>📍 Cenário</span>
+                <div>
+                    <select id="cloudScenarios" class="saved-selector" onchange="loadCloudItem('scenario')"></select>
+                    <button class="mini-btn" onclick="saveToCloud('scenario')">☁️ Salvar</button>
+                </div>
+            </div>
+            <label>Estilo Visual</label><div id="sf-estilos"></div>
+            <label>Ambiente</label><div id="sf-cenarios"></div>
+            <label>Posição Câmera</label><div id="sf-posicoes"></div>
+        </div>
+
+        <div class="card">
+            <div class="section-title">
+                <span>👤 Personagem</span>
+                <div>
+                    <select id="cloudCharacters" class="saved-selector" onchange="loadCloudItem('character')"></select>
+                    <button class="mini-btn" onclick="saveToCloud('character')">☁️ Salvar</button>
+                </div>
+            </div>
+            
+            <div class="grid-2">
+                <div><label>Idade</label><input type="number" id="charAge" class="search-input" placeholder="Nº"></div>
+                <div><label>Unidade</label><select id="charAgeUnit" class="search-input"><option value="yo">Anos</option><option value="mo">Meses</option></select></div>
+            </div>
+
+            <div class="grid-2">
+                <div><label>Cabelo</label><div id="sf-cabelos"></div></div>
+                <div><label>Rosto</label><div id="sf-rostos"></div></div>
+            </div>
+            <div class="grid-2">
+                <div><label>Olhos</label><div id="sf-olhos"></div></div>
+                <div><label>Cabeça</label><div id="sf-chapeus"></div></div>
+            </div>
+            <div class="grid-2">
+                <div><label>Acessório</label><div id="sf-acessorios"></div></div>
+                <div><label>Cor Acess.</label><div id="sf-corAcessorios"></div></div>
+            </div>
+            
+            <div style="margin-top:15px; border:1px solid #eee; padding:10px; border-radius:8px;">
+                <label style="margin-top:0; color:#007AFF;">👕 Camisa "ASSISTA:"</label>
+                <div class="grid-2">
+                    <div id="sf-tiposCamisa"></div>
+                    <div id="sf-coresCamisa"></div>
+                </div>
+                <input type="text" id="shirtText" class="search-input" placeholder="Texto (Ex: O FINAL)">
+            </div>
+        </div>
+
+        <div class="card">
+            <label>😊 Expressão</label>
+            <div class="grid-2">
+                <select id="exprCategory" class="search-input" onchange="updateExpressionList()">
+                    <option value="">Categoria...</option>
+                    <option value="happy">Feliz</option>
+                    <option value="sad">Triste</option>
+                    <option value="angry">Raiva</option>
+                    <option value="calm">Calmo</option>
+                    <option value="thoughtful">Pensativo</option>
+                    <option value="surprised">Surpreso</option>
+                </select>
+                <div id="sf-expression"></div>
+            </div>
+        </div>
+
+        <div class="card">
+            <label>💬 Roteiro (Falas e Ações)</label>
+            <div id="scriptContainer"></div>
+            <button class="mini-btn" style="width:100%; padding:10px; margin-top:10px;" onclick="addScriptLine()">+ Adicionar Linha</button>
+        </div>
+
+        <button class="main-btn" onclick="gerarJSON()">🚀 GERAR E SALVAR NA NUVEM</button>
+        <div id="outputArea" style="display:none; background:#1c1c1e; color:#00ff41; padding:15px; border-radius:10px; margin-top:20px; font-family:monospace; font-size:12px; white-space:pre-wrap;"></div>
+    </div>
+
+    <div id="view-gallery" class="view-container">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+            <h3>☁️ Prompts Salvos</h3>
+            <button class="mini-btn" onclick="initApp()">🔄 Atualizar</button>
+        </div>
+        <div id="cloudGalleryList"></div>
+    </div>
+
+    <script>
+        // --- ⚠️ COLE A URL DO SEU GOOGLE SCRIPT AQUI ⚠️ ---
+        const API_URL = "COLE_SUA_NOVA_URL_AQUI"; 
+
+        // Variáveis Globais
+        let CLOUD_LISTS = {}; // Vai guardar os cabelos, cenários, etc
+        let CLOUD_SAVED = []; // Vai guardar os personagens salvos
+
+        // Expressões Fixas (são muito complexas para sheet simples, mantivemos aqui, mas pode mudar se quiser)
+        const EXPRESSIONS_DB = {
+            happy: ["Sorrindo | Smiling", "Rindo | Laughing"], sad: ["Chorando | Crying", "Triste | Sad face"],
+            angry: ["Bravo | Angry", "Gritando | Screaming"], calm: ["Sereno | Serene", "Neutro | Neutral"],
+            thoughtful: ["Pensando | Thinking"], surprised: ["Chocado | Shocked"]
+        };
+
+        // --- INICIALIZAÇÃO ---
+        window.onload = initApp;
+
+        async function initApp() {
+            if(API_URL === "COLE_SUA_NOVA_URL_AQUI") {
+                document.getElementById('loadingText').innerText = "ERRO: Configure a URL no código!";
+                return;
+            }
+            
+            document.getElementById('loadingOverlay').style.display = 'flex';
+            
+            try {
+                // Busca TUDO do Google Sheets de uma vez
+                const res = await fetch(API_URL);
+                const data = await res.json();
+                
+                // 1. Popula as listas estáticas
+                CLOUD_LISTS = data.listas;
+                setupFieldsFromCloud();
+
+                // 2. Popula os salvos
+                CLOUD_SAVED = data.salvos;
+                updateSavedSelectors();
+                renderGallery();
+
+                document.getElementById('loadingOverlay').style.display = 'none';
+
+            } catch (err) {
+                document.getElementById('loadingText').innerText = "Erro de Conexão: " + err;
+            }
+        }
+
+        // Configura os campos com os dados que vieram da nuvem
+        function setupFieldsFromCloud() {
+            const proc = (arr) => (arr || []).map(i => {
+                let p = i.split('|'); return { t: p[0].trim(), v: p[1] ? p[1].trim() : p[0].trim() };
+            });
+
+            createSearchableField('sf-estilos', proc(CLOUD_LISTS.estilos));
+            createSearchableField('sf-cenarios', proc(CLOUD_LISTS.cenarios));
+            createSearchableField('sf-posicoes', proc(CLOUD_LISTS.posicoes));
+            createSearchableField('sf-cabelos', proc(CLOUD_LISTS.cabelos));
+            createSearchableField('sf-rostos', proc(CLOUD_LISTS.rostos));
+            createSearchableField('sf-olhos', proc(CLOUD_LISTS.olhos));
+            createSearchableField('sf-chapeus', proc(CLOUD_LISTS.chapeus));
+            createSearchableField('sf-acessorios', proc(CLOUD_LISTS.acessorios));
+            createSearchableField('sf-corAcessorios', proc(CLOUD_LISTS.corAcessorios));
+            createSearchableField('sf-tiposCamisa', proc(CLOUD_LISTS.tiposCamisa));
+            createSearchableField('sf-coresCamisa', proc(CLOUD_LISTS.coresCamisa));
+            
+            // Inicializa outros campos
+            createSearchableField('sf-expression', [{t:"Selecione categoria...", v:""}]);
+            if(document.getElementById('scriptContainer').children.length === 0) addScriptLine();
+        }
+
+        // --- SALVAR NA NUVEM ---
+        async function saveToCloud(type) {
+            const name = prompt("Nome para salvar:");
+            if(!name) return;
+            
+            document.getElementById('loadingText').innerText = "Salvando...";
+            document.getElementById('loadingOverlay').style.display = 'flex';
+
+            let content = {};
+            const getPair = (id) => ({ v: getVal(id), t: document.getElementById(id).querySelector('input').value });
+
+            if(type === 'character') {
+                content = {
+                    ageNum: document.getElementById('charAge').value,
+                    ageUnit: document.getElementById('charAgeUnit').value,
+                    shirtText: document.getElementById('shirtText').value,
+                    cabelos: getPair('sf-cabelos'), rostos: getPair('sf-rostos'), olhos: getPair('sf-olhos'),
+                    chapeus: getPair('sf-chapeus'), acessorios: getPair('sf-acessorios'), corAcessorios: getPair('sf-corAcessorios'),
+                    tiposCamisa: getPair('sf-tiposCamisa'), coresCamisa: getPair('sf-coresCamisa')
+                };
+            } else {
+                content = { estilo: getPair('sf-estilos'), cenario: getPair('sf-cenarios'), posicao: getPair('sf-posicoes') };
+            }
+
+            await fetch(API_URL, {
+                method: "POST", mode: "no-cors", headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ type: type, name: name, content: content })
+            });
+            
+            alert("Salvo! A página irá recarregar para atualizar a lista.");
+            initApp(); // Recarrega para pegar o novo item
+        }
+
+        function updateSavedSelectors() {
+            const fill = (type, elId) => {
+                const sel = document.getElementById(elId);
+                const items = CLOUD_SAVED.filter(i => i.type === type);
+                sel.innerHTML = `<option value="">📂 Carregar ${type}...</option>`;
+                if(items.length > 0) sel.style.display = 'inline-block';
+                items.forEach((item, idx) => {
+                    // Guardamos o índice global do array filtrado para achar depois
+                    sel.innerHTML += `<option value="${idx}">${item.name}</option>`;
+                });
+            };
+            fill('scenario', 'cloudScenarios');
+            fill('character', 'cloudCharacters');
+        }
+
+        function loadCloudItem(type) {
+            const idx = document.getElementById(type === 'character' ? 'cloudCharacters' : 'cloudScenarios').value;
+            if(idx === "") return;
+            
+            const items = CLOUD_SAVED.filter(i => i.type === type);
+            const item = items[idx].content;
+            const loadPair = (id, obj) => setVal(id, obj?.v || "", obj?.t || "");
+
+            if(type === 'character') {
+                document.getElementById('charAge').value = item.ageNum || "";
+                document.getElementById('charAgeUnit').value = item.ageUnit || "yo";
+                document.getElementById('shirtText').value = item.shirtText || "";
+                if(item.cabelos) loadPair('sf-cabelos', item.cabelos);
+                if(item.rostos) loadPair('sf-rostos', item.rostos);
+                if(item.olhos) loadPair('sf-olhos', item.olhos);
+                if(item.chapeus) loadPair('sf-chapeus', item.chapeus);
+                if(item.acessorios) loadPair('sf-acessorios', item.acessorios);
+                if(item.corAcessorios) loadPair('sf-corAcessorios', item.corAcessorios);
+                if(item.tiposCamisa) loadPair('sf-tiposCamisa', item.tiposCamisa);
+                if(item.coresCamisa) loadPair('sf-coresCamisa', item.coresCamisa);
+            } else {
+                if(item.estilo) loadPair('sf-estilos', item.estilo);
+                loadPair('sf-cenarios', item.cenario);
+                loadPair('sf-posicoes', item.posicao);
+            }
+        }
+
+        function renderGallery() {
+            const list = document.getElementById('cloudGalleryList');
+            const prompts = CLOUD_SAVED.filter(i => i.type === 'prompt').reverse();
+            list.innerHTML = "";
+            if(prompts.length === 0) list.innerHTML = "<div style='padding:20px; text-align:center; color:#999'>Nada salvo na nuvem.</div>";
+            
+            prompts.forEach(p => {
+                const d = document.createElement('div');
+                d.className = 'gallery-item';
+                d.innerHTML = `<div class="gallery-header"><span>${p.name}</span><small>${new Date(p.date).toLocaleDateString()}</small></div><div class="gallery-content">${JSON.stringify(p.content, null, 4)}</div>`;
+                list.appendChild(d);
+            });
+        }
+
+        // --- UI HELPERS ---
+        function switchTab(t) { 
+            document.querySelectorAll('.view-container').forEach(e=>e.classList.remove('active'));
+            document.querySelectorAll('.nav-btn').forEach(e=>e.classList.remove('active'));
+            document.getElementById('view-'+t).classList.add('active');
+            document.getElementById('tab-'+t).classList.add('active');
+        }
+        
+        function createSearchableField(id, data) {
+            const c = document.getElementById(id); c.innerHTML = ''; c.className = 'searchable-container';
+            const inp = document.createElement('input'); inp.className = 'search-input'; inp.placeholder = '...';
+            const h = document.createElement('hidden-val'); h.value = data[0]?.v || "";
+            const l = document.createElement('div'); l.className = 'options-list';
+            
+            const render = (txt) => {
+                l.innerHTML = '';
+                data.forEach(i => {
+                    if(i.t.toLowerCase().includes(txt.toLowerCase())) {
+                        const d = document.createElement('div'); d.className = 'option-item'; d.innerText = i.t;
+                        d.onclick = () => { inp.value = i.t; h.value = i.v; l.classList.remove('active'); };
+                        l.appendChild(d);
+                    }
+                });
+                if(txt && l.childElementCount===0) {
+                    const d = document.createElement('div'); d.className='option-item'; d.innerHTML=`<em>Usar: ${txt}</em>`;
+                    d.onclick=()=>{inp.value=txt; h.value=txt; l.classList.remove('active');}; l.appendChild(d);
+                }
+            };
+            inp.onfocus = () => { render(''); l.classList.add('active'); };
+            inp.oninput = (e) => { render(e.target.value); l.classList.add('active'); h.value=e.target.value; };
+            document.addEventListener('click', e => { if(!c.contains(e.target)) l.classList.remove('active'); });
+            
+            if(data[0]) { inp.value = data[0].t; h.value = data[0].v; }
+            c.append(inp, h, l);
+        }
+        function getVal(id) { return document.getElementById(id).querySelector('hidden-val')?.value || document.getElementById(id).querySelector('input').value; }
+        function setVal(id, en, pt) { const c=document.getElementById(id); c.querySelector('hidden-val').value=en; c.querySelector('input').value=pt||en; }
+        function updateExpressionList() { 
+            const c=document.getElementById('exprCategory').value; const d=EXPRESSIONS_DB[c]||[];
+            const p=d.map(i=>{let s=i.split('|');return{t:s[0].trim(),v:s[1]?s[1].trim():s[0].trim()}});
+            createSearchableField('sf-expression', p.length?p:[{t:"-",v:""}]);
+        }
+        function addScriptLine() {
+            const d=document.createElement('div'); d.style.marginBottom='10px';
+            d.innerHTML=`<div class="grid-2"><select class="ln-lang search-input"><option>PT</option><option>EN</option></select><input class="ln-act search-input" placeholder="Ação"></div><textarea class="ln-dial search-input" style="margin-top:5px"></textarea>`;
+            document.getElementById('scriptContainer').appendChild(d);
+        }
+
+        // --- GERAÇÃO JSON ---
+        async function gerarJSON() {
+            let visual = [];
+            const age = document.getElementById('charAge').value;
+            if(age) visual.push(`${age}${document.getElementById('charAgeUnit').value}`);
+            
+            ['cabelos','rostos','olhos','chapeus'].forEach(k => { const v=getVal('sf-'+k); if(v) visual.push(v); });
+            const acc = getVal('sf-acessorios'); const accC = getVal('sf-corAcessorios');
+            if(acc) visual.push(accC ? `${accC} ${acc}` : acc);
+            
+            const sType=getVal('sf-tiposCamisa'); const sCol=getVal('sf-coresCamisa'); const sTxt=document.getElementById('shirtText').value;
+            if(sType) visual.push(`Wearing a ${sCol} ${sType} with text "ASSISTA: ${sTxt||'VIDEO'}"`);
+            
+            let scripts = [];
+            document.querySelectorAll('#scriptContainer > div').forEach(el => {
+                scripts.push({ lang: el.querySelector('.ln-lang').value, act: el.querySelector('.ln-act').value, dial: el.querySelector('.ln-dial').value });
+            });
+
+            const result = {
+                visual: {
+                    style: getVal('sf-estilos'), scene: getVal('sf-cenarios'), camera: getVal('sf-posicoes'),
+                    character: visual.join(", "), expression: getVal('sf-expression')
+                },
+                script: scripts
+            };
+
+            document.getElementById('outputArea').innerText = JSON.stringify(result, null, 4);
+            document.getElementById('outputArea').style.display = 'block';
+            document.getElementById('outputArea').scrollIntoView({behavior:'smooth'});
+
+            if(confirm("Salvar prompt na nuvem?")) {
+                const n = prompt("Nome do Prompt:");
+                if(n) {
+                    await fetch(API_URL, { method: "POST", mode: "no-cors", headers: {"Content-Type":"application/json"}, body: JSON.stringify({type:'prompt', name:n, content:result}) });
+                    alert("Salvo!");
+                    initApp();
+                }
+            }
+        }
+    </script>
+</body>
+</html>
